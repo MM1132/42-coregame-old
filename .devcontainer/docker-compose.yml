@@ -1,0 +1,20 @@
+services:
+  my-core-bot:
+    image: registry.coregame.de/core/core-event-0:latest
+    platform: linux/amd64
+    volumes:
+      - ..:/workspace:cached
+    stdin_open: true
+    networks:
+      - default
+
+  visualizer:
+    image: registry.coregame.de/core/visualizer:latest
+    environment:
+      PORT: 80
+      SOCKET_SERVER: "host.docker.internal:4242"
+      HOST: "127.0.0.1:80"
+    ports:
+      - 80:80
+    networks:
+      - default
