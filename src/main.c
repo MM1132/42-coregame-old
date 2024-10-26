@@ -109,11 +109,11 @@ void    ft_user_loop(void *data)
     }
 
     // Change mode! 
-    if (full_fight_mode_activated == false && worker_count > 10)
+    if (full_fight_mode_activated == false && worker_count > 20)
     {
         full_fight_mode_activated = true;
     }
-    else if (full_fight_mode_activated == true && worker_count <= 5)
+    else if (full_fight_mode_activated == true && worker_count <= 10)
     {
         full_fight_mode_activated = false;
     }
@@ -146,14 +146,14 @@ void    ft_user_loop(void *data)
             double to_resource = ft_distance(curr, nearest_resource);
             // double to_opponent_core = ft_distance(curr, opponent_core);
             double to_enemy = ft_distance(curr, nearest_enemy);
-            if (collective_hp_less)
+            if (full_fight_mode_activated)
+            {
+                ft_travel_attack(curr, opponent_core);
+            }
+            else if (collective_hp_less)
             {
                 ft_travel_to_obj(curr, core);
                 ft_attack(curr, nearest_enemy);
-            }
-            else if (full_fight_mode_activated)
-            {
-                ft_travel_attack(curr, opponent_core);
             }
             else if ((to_enemy < to_resource))
             {
@@ -169,27 +169,34 @@ void    ft_user_loop(void *data)
             int collective_hp_less = is_collective_hp_less(curr, units, opponent_units);
 
             t_obj *nearest_opponent = ft_get_nearest_opponent_unit(curr);
-            t_obj *core = ft_get_first_opponent_core();
-            t_obj *nearest_enemy = ft_get_nearest_opponent_unit(curr);
+            t_obj *opponent_core = ft_get_first_opponent_core();
+            t_obj *my_core = ft_get_my_core();
 
             double to_opponent = ft_distance(curr, nearest_opponent);
-            double to_core = ft_distance(curr, core);
-            double closest_distance = to_opponent < to_core ? to_opponent : to_core;
+            double to_opponent_core = ft_distance(curr, opponent_core);
+            double closest_distance = to_opponent < to_opponent_core ? to_opponent : to_opponent_core;
 
-            if (closest_distance < 5000)
+            if (full_fight_mode_activated)
             {
-                if (collective_hp_less)
-                {
-                    ft_travel_to_obj(curr, core);
-                    ft_attack(curr, nearest_enemy);
-                }
-                else if ((to_opponent + 50) < to_core)
+                ft_travel_attack(curr, opponent_core);
+            }
+            else if (collective_hp_less)
+            {
+                ft_travel_to_obj(curr, my_core);
+                ft_attack(curr, nearest_opponent);
+                i++;
+                continue;
+            }
+
+            if (closest_distance < 1500)
+            {
+                if ((to_opponent + 50) < to_opponent_core)
                 {
                     ft_travel_attack(curr, nearest_opponent);
                 }
                 else
                 {
-                    ft_travel_attack(curr, core);
+                    ft_travel_attack(curr, opponent_core);
                 }
 
                 i++;
@@ -206,13 +213,13 @@ void    ft_user_loop(void *data)
                 continue;
             }
 
-            if (to_opponent < to_core)
+            if (to_opponent < to_opponent_core)
             {
                 ft_travel_attack(curr, nearest_opponent);
             }
             else
             {
-                ft_travel_attack(curr, core);
+                ft_travel_attack(curr, opponent_core);
             }
         }
         i++;
