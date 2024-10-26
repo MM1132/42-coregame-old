@@ -11,7 +11,7 @@ INC = $(COREDIR)
 EXEC = bot
 
 PLAYER1_ID := 10
-PLAYER2_ID := 20
+PLAYER2_ID := 1
 
 .PHONY: run debug clean fclean re $(EXEC) stop
 
