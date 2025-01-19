@@ -15,10 +15,11 @@ PLAYER2_ID := 1
 
 .PHONY: run debug clean fclean re $(EXEC) stop
 
+#./$(EXEC) $(PLAYER2_ID)
 run: build $(EXEC)
 	$(COREDIR)/game $(PLAYER1_ID) $(PLAYER2_ID) > /dev/null &
-	$(COREDIR)/starlord $(PLAYER1_ID) > /dev/null &
-	./$(EXEC) $(PLAYER2_ID)
+	./trusanov-bot $(PLAYER1_ID) > /dev/null &
+	./emil-bot $(PLAYER2_ID)
 
 debug: build $(EXEC)
 	$(COREDIR)/game $(PLAYER1_ID) $(PLAYER2_ID) > /dev/null &

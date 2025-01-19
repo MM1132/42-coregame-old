@@ -20,210 +20,191 @@ void	ft_init_func(void *data)
 	printf("Init CORE Bot\n");
 }
 
-int count_unit_by_type(t_obj **units, long unsigned int type)
-{
-    int index = 0;
-    int counter = 0;
-    while (units[index] != NULL)
-    {
-        if (units[index]->s_unit.type_id == type)
-        {
-            counter++;
-        }
-        index++;
-    }
-    return (counter);
-}
-
 #include <stdio.h>
 
-typedef struct s_unit_action {
-    unsigned long   id;
-    int             current_action;
-    int             movement_counter;
-} t_unit_action;
-
-int count_units(t_obj **units)
+void	ft_user_loop(void *data)
 {
-    int counter = 0;
-    while (units[counter] != NULL)
-    {
-        counter++;
-    }
-    return (counter);
-}
+	(void)data;
 
-int is_collective_hp_less(t_obj *curr, t_obj **my_units, t_obj **enemy_units)
-{
-    int friendly_hp = 0;
-    int enemy_hp = 0;
+	// Definitions
+	t_obj **my_units = ft_get_my_units();
+	t_obj **my_workers = filter_units_by_type(my_units, UNIT_WORKER);
+	t_obj **my_warriors = filter_units_by_type(my_units, UNIT_WARRIOR);
 
-    int index = 0;
-    while (my_units[index] != NULL)
-    {
-        double distance = ft_distance(curr, my_units[index]);
-        if (distance < 1000)
-        {
-            friendly_hp += my_units[index]->hp;
-        }
-        index++;
-    }
+	t_obj **opponent_units = ft_get_opponent_units();
 
-    index = 0;
-    while (enemy_units[index] != NULL)
-    {
-        double distance = ft_distance(curr, enemy_units[index]);
-        if (distance < 1000)
-        {
-            enemy_hp += enemy_units[index]->hp;
-        }
-        index++;
-    }
+	t_obj *my_core = ft_get_my_core();
+	t_obj *opponent_core = ft_get_first_opponent_core();
 
-    return ((friendly_hp - 1) < enemy_hp);
-}
+	int my_worker_count = count_units_by_type(my_units, UNIT_WORKER);
+	int my_warrior_count = count_units_by_type(my_units, UNIT_WARRIOR);
+	int opponent_warrior_count = count_units_by_type(opponent_units, UNIT_WARRIOR);
 
-// this function is called every time new data is recieved
-void    ft_user_loop(void *data)
-{
-    static int full_fight_mode_activated = false;
+	// CREATE UNITS
+	if (my_warrior_count < opponent_warrior_count || my_worker_count >= 20)
+		ft_create_type_id(UNIT_WARRIOR);
+	else
+		ft_create_type_id(UNIT_WORKER);
 
-    (void)data;
+	// LOGIC FOR WORKERS
+	int worker_index = 0;
+	while (my_workers[worker_index] != NULL)
+	{
+		t_obj *current_worker = my_workers[worker_index];
+		t_obj **other_workers = get_units_except(my_workers, current_worker);
 
-    t_obj **units = ft_get_my_units();
+		t_obj **sorted_resources = get_resources_sorted_by_distance(game.resources, current_worker);
 
-    // CREATING
-    int worker_count = count_unit_by_type(units, UNIT_WORKER);
-    int warrior_count = count_unit_by_type(units, UNIT_WARRIOR);
-    
-    t_obj **opponent_units = ft_get_opponent_units();
-    int opponent_warriors_count = 0;
-    int opponent_index = 0;
-    while (opponent_units[opponent_index] != NULL)
-    {
-        if (opponent_units[opponent_index]->s_unit.type_id == UNIT_WARRIOR)
-        {
-            opponent_warriors_count++;
-        }
-        opponent_index++;
-    }
+		// The attacking vs escaping logic
+		t_obj *nearest_opponent_unit = ft_get_nearest_opponent_unit(current_worker);
+		double distance_to_nearest_opponent = ft_distance(current_worker, nearest_opponent_unit);
+		if (distance_to_nearest_opponent < 800)
+		{
+			// Go help your ally! 
+			int ally_units_in_radius_count = count_units_in_radius(nearest_opponent_unit, other_workers, 200);
+			if (ally_units_in_radius_count > 0)
+			{
+				ft_travel_to_obj(current_worker, nearest_opponent_unit);
+				ft_attack(current_worker, nearest_opponent_unit);
+				worker_index++;
+				continue;
+			}
+			// Escape
+			if (is_collective_hp_less(current_worker, my_units, opponent_units))
+			{
+				ft_travel_to_obj(current_worker, my_core);
+				ft_attack(current_worker, nearest_opponent_unit);
+				worker_index++;
+				continue;
+			}
+			// Go for the kill
+			else
+			{
+				ft_travel_to_obj(current_worker, nearest_opponent_unit);
+				ft_attack(current_worker, nearest_opponent_unit);
+				worker_index++;
+				continue;
+			}
+		}
 
-    // Change mode! 
-    if (full_fight_mode_activated == false && worker_count > 20)
-    {
-        full_fight_mode_activated = true;
-    }
-    else if (full_fight_mode_activated == true && worker_count <= 10)
-    {
-        full_fight_mode_activated = false;
-    }
+		// RESOURCE MINING LOGIC
+		int resource_index = 0;
+		while (sorted_resources[resource_index] != NULL)
+		{
+			t_obj *current_resource = sorted_resources[resource_index];
 
-    if ((worker_count > 5 && opponent_warriors_count >= warrior_count) || worker_count > 15)
-    {
-        ft_create_type_id(UNIT_WARRIOR);
-    }
-    else
-    {
-        ft_create_type_id(UNIT_WORKER);
-    }
+			int other_workers_count_on_resource = count_units_in_radius(current_resource, other_workers, 800);
+			
+			t_obj *closest_worker = get_closest_unit(current_resource, my_workers);
+			int i_am_the_closest = closest_worker->id == current_worker->id;
+			if (i_am_the_closest)
+			{
+				ft_travel_attack(current_worker, current_resource);
+				break;
+			}
+			if (ft_distance(current_worker, current_resource) < 150)
+			{
+				ft_travel_attack(current_worker, current_resource);
+				break;
+			}
+			if (other_workers_count_on_resource == 0)
+			{
+				ft_travel_attack(current_worker, current_resource);
+				break;
+			}
 
-    // DO THINGS
-    int i = 0;
-    while (units[i] != NULL)
-    {
-        t_obj *curr = units[i];
-        if (curr->s_unit.type_id == UNIT_WORKER)
-        {
-            // Check if collective close HP is less
-            // Then just move towards the core and attack closest enemy
-            int collective_hp_less = is_collective_hp_less(curr, units, opponent_units);
+			resource_index++;
+		}
 
-            t_obj *nearest_resource = ft_get_nearest_resource(curr);
-            t_obj *nearest_enemy = ft_get_nearest_opponent_unit(curr);
-            t_obj *core = ft_get_my_core();
-            t_obj *opponent_core = ft_get_first_opponent_core();
-            
-            double to_resource = ft_distance(curr, nearest_resource);
-            // double to_opponent_core = ft_distance(curr, opponent_core);
-            double to_enemy = ft_distance(curr, nearest_enemy);
-            if (full_fight_mode_activated)
-            {
-                ft_travel_attack(curr, opponent_core);
-            }
-            else if (collective_hp_less)
-            {
-                ft_travel_to_obj(curr, core);
-                ft_attack(curr, nearest_enemy);
-            }
-            else if ((to_enemy < to_resource))
-            {
-                ft_travel_attack(curr, nearest_enemy);
-            }
-            else
-            {
-                ft_travel_attack(curr, nearest_resource);
-            }
-        }
-        else if (curr->s_unit.type_id == UNIT_WARRIOR)
-        {
-            int collective_hp_less = is_collective_hp_less(curr, units, opponent_units);
+		worker_index++;
+		free(other_workers);
+		free(sorted_resources);
+	}
 
-            t_obj *nearest_opponent = ft_get_nearest_opponent_unit(curr);
-            t_obj *opponent_core = ft_get_first_opponent_core();
-            t_obj *my_core = ft_get_my_core();
+	// LOGIC FOR WARRIORS
+	int warrior_index = 0;
+	while (my_warriors[warrior_index] != NULL)
+	{
+		t_obj *current_warrior = my_warriors[warrior_index];
+		t_obj *nearest_opponent_unit = ft_get_nearest_opponent_unit(current_warrior);
 
-            double to_opponent = ft_distance(curr, nearest_opponent);
-            double to_opponent_core = ft_distance(curr, opponent_core);
-            double closest_distance = to_opponent < to_opponent_core ? to_opponent : to_opponent_core;
+		double distance_to_opponent_core = ft_distance(current_warrior, opponent_core);
+		double distance_to_nearest_opponent = ft_distance(current_warrior, nearest_opponent_unit);
 
-            if (full_fight_mode_activated)
-            {
-                ft_travel_attack(curr, opponent_core);
-            }
-            else if (collective_hp_less)
-            {
-                ft_travel_to_obj(curr, my_core);
-                ft_attack(curr, nearest_opponent);
-                i++;
-                continue;
-            }
+		// If there aren't any opponents left, just simply go attack the core
+		if (nearest_opponent_unit == NULL || \
+			distance_to_opponent_core < distance_to_nearest_opponent)
+		{
+			ft_travel_to_obj(current_warrior, opponent_core);
+			ft_attack(current_warrior, opponent_core);
+			warrior_index++;
+			continue;
+		}
 
-            if (closest_distance < 1500)
-            {
-                if ((to_opponent + 50) < to_opponent_core)
-                {
-                    ft_travel_attack(curr, nearest_opponent);
-                }
-                else
-                {
-                    ft_travel_attack(curr, opponent_core);
-                }
+		// If the opponent is so close that we cannot escape anymore, just fuck it and attack them
+		if (distance_to_nearest_opponent < 200)
+		{
+			ft_travel_to_obj(current_warrior, nearest_opponent_unit);
+			ft_attack(current_warrior, nearest_opponent_unit);
+			warrior_index++;
+			continue;
+		}
+		if (distance_to_nearest_opponent < 1000)
+		{
+			// Now here we are deciding whether or not to go for the kill
+			if (is_collective_hp_less(current_warrior, my_units, opponent_units))
+			{
+				ft_travel_to_obj(current_warrior, my_core);
+				ft_attack(current_warrior, nearest_opponent_unit);
+				warrior_index++;
+				continue;
+			}
+			else
+			{
+				ft_travel_to_obj(current_warrior, nearest_opponent_unit);
+				ft_attack(current_warrior, nearest_opponent_unit);
+				warrior_index++;
+				continue;
+			}
+		}
 
-                i++;
-                continue;
-            }
+		// AWESOME ATTACKING SPREADING
+		// t_obj **sorted_opponent_units = get_resources_sorted_by_distance(*opponent_units, current_warrior);
+		// int opponent_index = 0;
+		// while (sorted_opponent_units[opponent_index] != NULL)
+		// {
+		// 	t_obj *current_opponent = sorted_opponent_units[opponent_index];
 
-            int warrior_count = count_unit_by_type(units, UNIT_WARRIOR);
-            if (warrior_count <= 3)
-            {
-                t_obj *our_core = ft_get_my_core();
+		// 	int other_workers_count_on_resource = count_units_in_radius(current_opponent, current_warrior, 800);
+			
+		// 	t_obj *closest_worker = get_closest_unit(current_opponent, my_workers);
+		// 	int i_am_the_closest = closest_worker->id == current_warrior->id;
+		// 	if (i_am_the_closest)
+		// 	{
+		// 		ft_travel_attack(current_warrior, current_opponent);
+		// 		break;
+		// 	}
+		// 	if (ft_distance(current_warrior, current_opponent) < 150)
+		// 	{
+		// 		ft_travel_attack(current_warrior, current_opponent);
+		// 		break;
+		// 	}
+		// 	if (other_workers_count_on_resource == 0)
+		// 	{
+		// 		ft_travel_attack(current_warrior, current_opponent);
+		// 		break;
+		// 	}
 
-                ft_travel_to(curr, our_core->x, our_core->y);
-                i++;
-                continue;
-            }
+		// 	opponent_index++;
+		// }
 
-            if (to_opponent < to_opponent_core)
-            {
-                ft_travel_attack(curr, nearest_opponent);
-            }
-            else
-            {
-                ft_travel_attack(curr, opponent_core);
-            }
-        }
-        i++;
-    }
+		ft_travel_attack(current_warrior, nearest_opponent_unit);
 
-    free(units);
+		warrior_index++;
+	}
+
+	free(my_units);
+	free(my_workers);
+	free(my_warriors);
+	free(opponent_units);
 }
